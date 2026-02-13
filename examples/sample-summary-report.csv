@@ -1,0 +1,14 @@
+Metric,Value
+Test Run Timestamp,2026-02-12T13-00-00
+Total Tests,45
+Passed Tests,38
+Failed Tests,5
+Warning Tests,2
+Pass Rate,84.44%
+Total API Calls,127
+Failed API Calls,3
+API Issues Found,8
+Total Links Tested,156
+Broken Links,2
+Total Pages Tested,23
+Total Duration (ms),185634

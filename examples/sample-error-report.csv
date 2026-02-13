@@ -1,0 +1,5 @@
+Timestamp,Error Type,Page URL,Test Name,Status,Error Message,Details
+2026-02-12T13:00:09.200Z,Test Error,https://leagueoftraders.io/dashboard,Load Dashboard,FAIL,Navigation timeout,
+2026-02-12T13:00:10.000Z,API Error,https://leagueoftraders.io/dashboard,https://leagueoftraders.io/api/user/profile,CRITICAL,API call failed with status 500,GET 500
+2026-02-12T13:00:15.000Z,Link Error,https://leagueoftraders.io/about,Terms Link,FAIL,HTTP 404 Not Found,Link: /terms
+2026-02-12T13:00:18.500Z,API Error,https://leagueoftraders.io/settings,https://leagueoftraders.io/api/settings,WARNING,API call failed with status 403,GET 403

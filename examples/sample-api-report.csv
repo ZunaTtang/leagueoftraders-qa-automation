@@ -1,0 +1,8 @@
+Timestamp,Page URL,API URL,Method,HTTP Status,Duration (ms),Issue Type,Issue Severity,Issue Description
+2026-02-12T13:00:01.000Z,https://leagueoftraders.io/,https://leagueoftraders.io/api/homepage,GET,200,234,,,
+2026-02-12T13:00:01.500Z,https://leagueoftraders.io/,https://leagueoftraders.io/api/user/status,GET,200,123,,,
+2026-02-12T13:00:02.000Z,https://leagueoftraders.io/,https://leagueoftraders.io/api/homepage,GET,200,256,duplicate,warning,API called 2 times on same page
+2026-02-12T13:00:06.000Z,https://leagueoftraders.io/login,https://leagueoftraders.io/api/auth/status,GET,200,89,,,
+2026-02-12T13:00:10.000Z,https://leagueoftraders.io/dashboard,https://leagueoftraders.io/api/user/profile,GET,500,2345,error,critical,API call failed with status 500
+2026-02-12T13:00:12.000Z,https://leagueoftraders.io/markets,https://leagueoftraders.io/api/markets/list,GET,200,567,missing,warning,Missing value for field: markets.data
+2026-02-12T13:00:12.500Z,https://leagueoftraders.io/markets,https://leagueoftraders.io/api/markets/trending,GET,200,234,missing,info,Empty array at path: trending

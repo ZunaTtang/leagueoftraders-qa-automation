@@ -1,0 +1,39 @@
+{
+  "name": "leagueoftraders-qa-automation",
+  "version": "1.0.0",
+  "description": "Production-grade QA automation framework for League of Traders",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test --project=smoke",
+    "test:regression": "playwright test --project=regression",
+    "test:crawler": "playwright test --project=crawler",
+    "crawl:discover": "playwright test --project=crawler-discover",
+    "crawl:validate": "playwright test --project=crawler-validate",
+    "crawl:full": "npm run crawl:discover && npm run crawl:validate",
+    "test:crawl": "npm run crawl:full",
+    "test:nightly": "playwright test --project=nightly",
+    "test:all": "playwright test --project=smoke --project=regression --project=crawler",
+    "test:integration": "playwright test --project=integration",
+    "test:api": "playwright test tests/api",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "report": "playwright show-report",
+    "ui": "playwright test --ui"
+  },
+  "keywords": [
+    "qa",
+    "automation",
+    "playwright",
+    "testing"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
+    "@playwright/test": "^1.58.1",
+    "@types/node": "^25.2.0",
+    "dotenv": "^17.2.3",
+    "typescript": "^5.9.3"
+  }
+}

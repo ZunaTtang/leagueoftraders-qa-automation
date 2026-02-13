@@ -1,0 +1,7 @@
+Timestamp,Page URL,Page Name,Test Type,Test Name,Status,Duration (ms),Error Message,Details
+2026-02-12T13:00:00.000Z,https://leagueoftraders.io/,Homepage,page-load,Load Homepage,PASS,3245,,API Calls: 12, Issues: 2
+2026-02-12T13:00:03.500Z,https://leagueoftraders.io/,Homepage,quality-gate,Quality Gates,PASS,2100,,
+2026-02-12T13:00:05.800Z,https://leagueoftraders.io/login,Login Page,page-load,Load Login Page,PASS,1523,,API Calls: 3, Issues: 0
+2026-02-12T13:00:07.500Z,https://leagueoftraders.io/login,Login Page,quality-gate,Quality Gates,PASS,980,,
+2026-02-12T13:00:09.200Z,https://leagueoftraders.io/dashboard,Dashboard,page-load,Load Dashboard,FAIL,4567,Navigation timeout,
+2026-02-12T13:00:13.900Z,https://leagueoftraders.io/markets,Markets,page-load,Load Markets,PASS,2890,,API Calls: 8, Issues: 1
