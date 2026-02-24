@@ -69,7 +69,7 @@ async function validateInteractionEffect(
     originalURL: string
 ): Promise<string> {
     // Give UI time to respond
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(500);
 
     if (await didURLChange(page, originalURL)) {
         return 'URL changed';
@@ -171,23 +171,30 @@ export async function testPageButtons(page: Page): Promise<InteractionResult[]> 
     ];
 
     for (const selector of buttonSelectors) {
-        const allButtons = await page.locator(selector).all();
-        // Limit to first 3 visible buttons to prevent timeouts during regression
-        const buttons = allButtons.slice(0, 3);
+        if (page.isClosed()) break;
+        // Collect visible buttons only
+        const allLocators = await page.locator(selector).all();
+        const visibleLocators: Locator[] = [];
 
-        for (const button of buttons) {
+        for (const loc of allLocators) {
+            if (await loc.isVisible().catch(() => false)) {
+                visibleLocators.push(loc);
+            }
+            if (visibleLocators.length >= 3) break; // Optimization: stop finding more if we have enough
+        }
+
+        for (const button of visibleLocators) {
+            const currentURL = page.url();
             const result = await safeClickButton(page, button);
             results.push(result);
 
             // If URL changed, we need to go back
             if (result.validation === 'URL changed') {
                 try {
-                    await page.goBack({ waitUntil: 'domcontentloaded', timeout: 10000 });
+                    await page.goBack({ waitUntil: 'domcontentloaded', timeout: 5000 });
                 } catch (navError) {
-                    console.warn('⚠️  Could not go back to previous page:', navError);
-                    // Re-visit the original page to ensure we can continue testing
-                    // logical implication: we might need to break this loop or ensure state is reset
-                    // For now, simpler to just log and continue, subsequent tests might fail if page is wrong
+                    console.warn('⚠️  Could not go back, trying direct navigation:', navError);
+                    await page.goto(currentURL, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => { });
                 }
             }
 

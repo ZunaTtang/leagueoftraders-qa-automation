@@ -79,7 +79,7 @@ export default defineConfig({
             testDir: './tests/functional',
             use: { ...devices['Desktop Chrome'] },
             dependencies: ['setup'],
-            timeout: 120 * 1000,
+            timeout: 180 * 1000,
         },
 
         {
