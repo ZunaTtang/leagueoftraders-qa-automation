@@ -1,19 +1,15 @@
 name: QA Automation
 
 on:
-  # Smoke tests on PRs
   pull_request:
     branches: [main, develop]
-  
-  # Regression on main push
+
   push:
     branches: [main]
-  
-  # Nightly full scan
+
   schedule:
     - cron: '0 0 * * *' # Daily at midnight UTC
-  
-  # Manual trigger
+
   workflow_dispatch:
     inputs:
       test_suite:
@@ -29,36 +25,40 @@ on:
           - all
 
 jobs:
-  # Smoke Tests (Fast PR checks)
+
+  # -----------------------------
+  # Smoke Tests
+  # -----------------------------
   smoke:
     name: Smoke Tests
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_suite == 'smoke')
     timeout-minutes: 10
-    
+
+    env:
+      LOT_BASE_URL: ${{ secrets.LOT_BASE_URL || 'https://leagueoftraders.io' }}
+      LOT_EMAIL: ${{ secrets.LOT_EMAIL }}
+      LOT_PASSWORD: ${{ secrets.LOT_PASSWORD }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
-      
+
       - name: Run smoke tests
-        env:
-          LOT_BASE_URL: ${{ secrets.LOT_BASE_URL || 'https://leagueoftraders.io' }}
-          LOT_EMAIL: ${{ secrets.LOT_EMAIL }}
-          LOT_PASSWORD: ${{ secrets.LOT_PASSWORD }}
         run: npm run test:smoke
-      
+
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4
@@ -69,37 +69,41 @@ jobs:
             test-results/
             qa-summary.json
           retention-days: 7
-  
-  # Regression Tests (Main branch)
+
+
+  # -----------------------------
+  # Regression Tests
+  # -----------------------------
   regression:
     name: Regression Tests
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.test_suite == 'regression')
     timeout-minutes: 30
-    
+
+    env:
+      LOT_BASE_URL: ${{ secrets.LOT_BASE_URL || 'https://leagueoftraders.io' }}
+      LOT_EMAIL: ${{ secrets.LOT_EMAIL }}
+      LOT_PASSWORD: ${{ secrets.LOT_PASSWORD }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
-      
+
       - name: Run regression tests
-        env:
-          LOT_BASE_URL: ${{ secrets.LOT_BASE_URL || 'https://leagueoftraders.io' }}
-          LOT_EMAIL: ${{ secrets.LOT_EMAIL }}
-          LOT_PASSWORD: ${{ secrets.LOT_PASSWORD }}
         run: npm run test:regression
-      
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -110,44 +114,44 @@ jobs:
             test-results/
             qa-summary.json
           retention-days: 14
-  
-  # Full Crawl (Nightly)
+
+
+  # -----------------------------
+  # Nightly Full Scan
+  # -----------------------------
   nightly:
     name: Nightly Full Scan
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.test_suite == 'nightly' || github.event.inputs.test_suite == 'crawl' || github.event.inputs.test_suite == 'all'))
     timeout-minutes: 60
-    
+
+    env:
+      LOT_BASE_URL: ${{ secrets.LOT_BASE_URL || 'https://leagueoftraders.io' }}
+      LOT_EMAIL: ${{ secrets.LOT_EMAIL }}
+      LOT_PASSWORD: ${{ secrets.LOT_PASSWORD }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
-      
+
       - name: Run URL discovery
-        env:
-          LOT_BASE_URL: ${{ secrets.LOT_BASE_URL || 'https://leagueoftraders.io' }}
         run: npm run crawl:discover
 
       - name: Run page validation
-        if: success()
-        env:
-          LOT_BASE_URL: ${{ secrets.LOT_BASE_URL || 'https://leagueoftraders.io' }}
-          LOT_EMAIL: ${{ secrets.LOT_EMAIL }}
-          LOT_PASSWORD: ${{ secrets.LOT_PASSWORD }}
-          padding: 0
         run: npm run crawl:validate
-        continue-on-error: true # Report validation warnings but don't fail job unless critical errors
+        continue-on-error: true
 
       - name: Upload crawler artifacts
         if: always()
@@ -160,15 +164,10 @@ jobs:
             crawl-discovery-summary.json
             crawl-validation-summary.json
           retention-days: 7
-      
+
       - name: Run accessibility tests
-        if: success() || failure()
-        env:
-          LOT_BASE_URL: ${{ secrets.LOT_BASE_URL || 'https://leagueoftraders.io' }}
-          LOT_EMAIL: ${{ secrets.LOT_EMAIL }}
-          LOT_PASSWORD: ${{ secrets.LOT_PASSWORD }}
         run: npm run test:nightly
-      
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -179,7 +178,7 @@ jobs:
             test-results/
             qa-summary.json
           retention-days: 30
-      
+
       - name: Print summary
         if: always()
         run: |
