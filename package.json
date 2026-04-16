@@ -19,7 +19,9 @@
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
     "report": "playwright show-report",
-    "ui": "playwright test --ui"
+    "ui": "playwright test --ui",
+    "agent:ux": "ts-node agent/run.ts",
+    "agent:ux:headed": "cross-env HEADLESS=false ts-node agent/run.ts"
   },
   "keywords": [
     "qa",
@@ -30,10 +32,13 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.89.0",
     "@axe-core/playwright": "^4.11.1",
     "@playwright/test": "^1.58.1",
     "@types/node": "^25.2.0",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.2.3",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }
 }
