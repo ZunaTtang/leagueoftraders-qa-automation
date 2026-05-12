@@ -1,12 +1,7 @@
-import { Page } from '@playwright/test';
-import { chromium, FullConfig } from '@playwright/test';
+import { chromium, FullConfig, BrowserContext } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
-
-/**
- * Authentication Manager
- * Handles login and session state persistence
- */
+import { getAuthCredentials, getBaseURL, getLoginPath, shouldCheckLoginPage } from './env';
 
 export const AUTH_DIR = path.join(process.cwd(), '.auth');
 export const GUEST_STATE_FILE = path.join(AUTH_DIR, 'guest.json');
@@ -17,115 +12,100 @@ export interface AuthCredentials {
     password: string;
 }
 
-/**
- * Ensure .auth directory exists
- */
 export function ensureAuthDir(): void {
     if (!fs.existsSync(AUTH_DIR)) {
         fs.mkdirSync(AUTH_DIR, { recursive: true });
     }
 }
 
-/**
- * Perform login and save authenticated state
- */
-export async function setupAuthenticatedUser(config: FullConfig): Promise<void> {
-    ensureAuthDir();
-
-    const baseURL = process.env.LOT_BASE_URL || 'https://leagueoftraders.io';
-    const email = process.env.LOT_EMAIL;
-    const password = process.env.LOT_PASSWORD;
-
-    if (!email || !password) {
-        throw new Error(
-            '❌ Missing credentials: LOT_EMAIL and LOT_PASSWORD must be set in .env file'
-        );
+function ensureTestResultsDir(): void {
+    const dir = path.join(process.cwd(), 'test-results');
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
     }
+}
 
-    console.log('🔐 Setting up authenticated user session...');
+function buildAbsoluteURL(baseURL: string, routePath: string): string {
+    return new URL(routePath, `${baseURL}/`).toString();
+}
+
+async function saveUnauthenticatedStates(context: BrowserContext): Promise<void> {
+    await context.storageState({ path: GUEST_STATE_FILE });
+    await context.storageState({ path: USER_STATE_FILE });
+}
+
+/**
+ * Performs optional login and saves reusable browser storage states.
+ *
+ * If QA_CHECK_LOGIN=false or credentials are missing, this does not fail the run.
+ * Instead, it saves guest state to both guest and user files so public QA checks can run.
+ */
+export async function setupAuthenticatedUser(_config: FullConfig): Promise<void> {
+    ensureAuthDir();
+    ensureTestResultsDir();
+
+    const baseURL = getBaseURL();
+    const loginURL = buildAbsoluteURL(baseURL, getLoginPath());
+    const { email, password } = getAuthCredentials();
+    const shouldLogin = shouldCheckLoginPage() && Boolean(email && password);
 
     const browser = await chromium.launch();
     const context = await browser.newContext();
     const page = await context.newPage();
 
     try {
-        // Navigate to login page
-        await page.goto(`${baseURL}/login`, { waitUntil: 'networkidle' });
+        if (!shouldLogin) {
+            console.log('Skipping authenticated setup. Saving guest storage state.');
+            await saveUnauthenticatedStates(context);
+            return;
+        }
 
-        // Handle "Continue with your email" selection screen if present
+        console.log(`Setting up authenticated browser state via ${loginURL}`);
+        await page.goto(loginURL, { waitUntil: 'networkidle' });
+
         const continueWithEmail = page.locator('text="Continue with your email"');
-        if (await continueWithEmail.isVisible({ timeout: 5000 })) {
-            console.log('📧 Clicking "Continue with your email"...');
+        if (await continueWithEmail.isVisible({ timeout: 5000 }).catch(() => false)) {
             await continueWithEmail.click();
         }
 
-        // Attempt to find and fill login form
-        // NOTE: These selectors may need adjustment based on actual site structure
         const emailInput = page.locator('input[type="email"], input[name="email"], input[placeholder*="email" i]').first();
         const passwordInput = page.locator('input[type="password"], input[name="password"]').first();
         const submitButton = page.locator('button[type="submit"], button:has-text("Login"), button:has-text("Sign in")').first();
 
-        // Check if login form exists
         const emailVisible = await emailInput.isVisible({ timeout: 5000 }).catch(() => false);
-
         if (!emailVisible) {
-            console.warn('⚠️  Login form not found. Possible reasons:');
-            console.warn('   - Site requires CAPTCHA or bot detection');
-            console.warn('   - Site structure has changed');
-            console.warn('   - Already logged in (check cookies)');
-            console.warn('Saving guest state instead...');
-
-            await context.storageState({ path: GUEST_STATE_FILE });
-            await browser.close();
+            console.warn('Login form was not found. Saving guest state instead.');
+            await saveUnauthenticatedStates(context);
             return;
         }
 
-        await emailInput.fill(email);
-        await passwordInput.fill(password);
-
-        // Take screenshot before login attempt
+        await emailInput.fill(email!);
+        await passwordInput.fill(password!);
         await page.screenshot({ path: 'test-results/login-attempt.png', fullPage: true });
-
         await submitButton.click();
 
-        // Wait for navigation (indicates successful login)
-        await page.waitForURL(url => !url.toString().includes('/login'), { timeout: 15000 })
+        await page.waitForURL(url => !url.toString().includes(getLoginPath()), { timeout: 15000 })
             .catch(async () => {
-                // Login might have failed - take screenshot
                 await page.screenshot({ path: 'test-results/login-failed.png', fullPage: true });
-                throw new Error('❌ Login failed: Did not navigate away from login page. Check test-results/login-failed.png');
+                throw new Error('Login failed: the page did not navigate away from the login route.');
             });
 
-        console.log('✅ Login successful!');
-
-        // Save authenticated state
         await context.storageState({ path: USER_STATE_FILE });
-        console.log(`✅ Saved authenticated state to ${USER_STATE_FILE}`);
 
-        // Also save guest state (for tests that don't need auth)
         const guestContext = await browser.newContext();
         await guestContext.storageState({ path: GUEST_STATE_FILE });
         await guestContext.close();
-        console.log(`✅ Saved guest state to ${GUEST_STATE_FILE}`);
 
+        console.log(`Saved authenticated state to ${USER_STATE_FILE}`);
+        console.log(`Saved guest state to ${GUEST_STATE_FILE}`);
     } catch (error) {
-        console.error('❌ Authentication setup failed:', error);
-
-        // Take final screenshot
-        await page.screenshot({ path: 'test-results/auth-error.png', fullPage: true });
-
-        throw new Error(
-            `Authentication failed. Check test-results/auth-error.png for details.\n` +
-            `Original error: ${error}`
-        );
+        await page.screenshot({ path: 'test-results/auth-error.png', fullPage: true }).catch(() => undefined);
+        throw new Error(`Authentication setup failed. Check test-results/auth-error.png. Original error: ${error}`);
     } finally {
         await browser.close();
     }
 }
 
-/**
- * Check if auth state files exist
- */
 export function hasAuthState(): boolean {
     return fs.existsSync(USER_STATE_FILE) && fs.existsSync(GUEST_STATE_FILE);
 }

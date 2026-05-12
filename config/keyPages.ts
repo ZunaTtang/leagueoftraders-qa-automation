@@ -1,7 +1,4 @@
-/**
- * Key Pages Configuration
- * Defines critical pages, button rules, and danger zones
- */
+import { getListEnv, getLoginPath, shouldCheckLoginPage } from '../utils/env';
 
 export interface PageDefinition {
     path: string;
@@ -11,43 +8,60 @@ export interface PageDefinition {
 }
 
 export interface ButtonRules {
-    /** Selectors or text patterns for dangerous buttons (never click) */
     dangerPatterns: string[];
-
-    /** Selectors or text patterns for safe buttons (ok to click) */
     safePatterns: string[];
-
-    /** Routes that should never be clicked */
     dangerRoutes: string[];
 }
 
-/**
- * Critical pages to test in Smoke suite
- */
-export const criticalPages: PageDefinition[] = [
-    { path: '/', name: 'Homepage', requiresAuth: false, priority: 'critical' },
-    { path: '/login', name: 'Login Page', requiresAuth: false, priority: 'critical' },
-    { path: '/dashboard', name: 'Dashboard', requiresAuth: true, priority: 'critical' },
-    { path: '/markets', name: 'Markets', requiresAuth: false, priority: 'critical' },
-    { path: '/leaderboard', name: 'Leaderboard', requiresAuth: false, priority: 'high' },
+const authPathPatterns = getListEnv('QA_AUTH_PATHS');
+
+function normalizePath(path: string): string {
+    if (!path) return '/';
+    return path.startsWith('/') ? path : `/${path}`;
+}
+
+function titleFromPath(path: string): string {
+    if (path === '/') return 'Home';
+    return path
+        .split('/')
+        .filter(Boolean)
+        .map(part => part.replace(/[-_]/g, ' '))
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' / ');
+}
+
+function isAuthRequired(path: string): boolean {
+    return authPathPatterns.some(pattern => path.includes(pattern));
+}
+
+function createPageDefinitions(paths: string[], priority: PageDefinition['priority']): PageDefinition[] {
+    return Array.from(new Set(paths.map(normalizePath))).map(path => ({
+        path,
+        name: titleFromPath(path),
+        requiresAuth: isAuthRequired(path),
+        priority,
+    }));
+}
+
+const defaultCriticalPaths = [
+    '/',
+    ...(shouldCheckLoginPage() ? [getLoginPath()] : []),
 ];
 
-/**
- * Additional pages for Regression suite
- */
-export const regressionPages: PageDefinition[] = [
-    ...criticalPages,
-    { path: '/about', name: 'About', requiresAuth: false, priority: 'medium' },
-    { path: '/pricing', name: 'Pricing', requiresAuth: false, priority: 'high' },
-    { path: '/profile', name: 'My Profile', requiresAuth: true, priority: 'high' },
-    { path: '/settings', name: 'Settings', requiresAuth: true, priority: 'medium' },
-];
+const configuredCriticalPaths = getListEnv('QA_CRITICAL_PATHS');
+const configuredRegressionPaths = getListEnv('QA_REGRESSION_PATHS');
 
-/**
- * Button interaction rules
- */
+export const criticalPages: PageDefinition[] = createPageDefinitions(
+    configuredCriticalPaths.length > 0 ? configuredCriticalPaths : defaultCriticalPaths,
+    'critical'
+);
+
+export const regressionPages: PageDefinition[] = createPageDefinitions(
+    configuredRegressionPaths.length > 0 ? configuredRegressionPaths : criticalPages.map(page => page.path),
+    'high'
+);
+
 export const buttonRules: ButtonRules = {
-    // Never click these (destructive actions)
     dangerPatterns: [
         'logout',
         'log out',
@@ -60,9 +74,9 @@ export const buttonRules: ButtonRules = {
         'place order',
         'buy now',
         'sell now',
+        'submit payment',
+        'delete account',
     ],
-
-    // Safe to click (read-only or navigation)
     safePatterns: [
         'learn more',
         'view details',
@@ -76,8 +90,6 @@ export const buttonRules: ButtonRules = {
         'filter',
         'sort',
     ],
-
-    // Routes to avoid
     dangerRoutes: [
         '/logout',
         '/signout',
@@ -85,14 +97,13 @@ export const buttonRules: ButtonRules = {
         '/settings/delete-account',
         '/wallet/withdraw',
         '/trade/execute',
+        '/checkout/confirm',
     ],
 };
 
-/**
- * Routes to exclude from crawling (dangerous or out of scope)
- */
 export const crawlExclusions: string[] = [
     ...buttonRules.dangerRoutes,
+    ...getListEnv('QA_CRAWL_EXCLUSIONS'),
     '/admin',
     '/api/',
     '/_next/',
@@ -100,18 +111,13 @@ export const crawlExclusions: string[] = [
     '/assets/',
 ];
 
-/**
- * Check if a button should be avoided
- */
 export function isDangerousButton(text: string, href?: string): boolean {
     const lowerText = text.toLowerCase();
 
-    // Check danger patterns
     if (buttonRules.dangerPatterns.some(pattern => lowerText.includes(pattern))) {
         return true;
     }
 
-    // Check danger routes
     if (href && buttonRules.dangerRoutes.some(route => href.includes(route))) {
         return true;
     }
@@ -119,9 +125,6 @@ export function isDangerousButton(text: string, href?: string): boolean {
     return false;
 }
 
-/**
- * Check if a URL should be excluded from crawling
- */
 export function shouldExcludeFromCrawl(url: string): boolean {
     return crawlExclusions.some(pattern => url.includes(pattern));
 }

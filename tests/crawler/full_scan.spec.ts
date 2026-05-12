@@ -2,23 +2,16 @@ import { test, expect } from '@playwright/test';
 import { discoverPages, validateLinks } from '../../utils/crawler';
 import { setupMonitoring, runQualityGates } from '../../utils/assertions';
 import { initializeSummary, addTestResult, addBrokenLinks, saveSummary, printSummary } from '../../utils/reportHelper';
-
-/**
- * Crawler Tests - Full Site Coverage
- * Deep crawl for nightly runs (30-60 minutes)
- */
+import { getBaseURL, getIgnoredBrokenLinkPatterns } from '../../utils/env';
 
 test.describe('Crawler - Full Site Scan', () => {
-
-    test('should discover and validate all pages', async ({ page, browser }) => {
+    test('should discover and validate pages', async ({ page }) => {
         const startTime = Date.now();
         initializeSummary();
 
-        const baseURL = process.env.LOT_BASE_URL || 'https://leagueoftraders.io';
+        const baseURL = getBaseURL();
+        console.log(`Starting full site crawl of ${baseURL}`);
 
-        console.log(`\n🕷️  Starting full site crawl of ${baseURL}\n`);
-
-        // Discover all pages
         const discoveredPages = await discoverPages(page, baseURL, {
             maxPages: 100,
             maxDepth: 3,
@@ -26,19 +19,15 @@ test.describe('Crawler - Full Site Scan', () => {
             timeout: 120000,
         });
 
-        console.log(`\n✅ Discovered ${discoveredPages.length} pages\n`);
+        console.log(`Discovered ${discoveredPages.length} pages`);
 
-        // Visit each page and run quality gates
         let passCount = 0;
         let failCount = 0;
 
         for (const pageURL of discoveredPages) {
             try {
                 const { consoleErrors, failedRequests } = await setupMonitoring(page);
-
                 await page.goto(pageURL, { waitUntil: 'domcontentloaded', timeout: 120000 });
-
-                // Run quality gates
                 await runQualityGates(page, consoleErrors, failedRequests);
 
                 passCount++;
@@ -48,15 +37,12 @@ test.describe('Crawler - Full Site Scan', () => {
                     errors: [],
                 });
 
-                console.log(`  ✅ ${pageURL}`);
-
+                console.log(`PASS ${pageURL}`);
             } catch (error) {
                 failCount++;
                 const errorMsg = String(error);
-
-                // Take screenshot on failure
                 const screenshotPath = `test-results/failure-${Date.now()}.png`;
-                await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => { });
+                await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
 
                 addTestResult({
                     page: pageURL,
@@ -65,57 +51,49 @@ test.describe('Crawler - Full Site Scan', () => {
                     screenshot: screenshotPath,
                 });
 
-                console.log(`  ❌ ${pageURL}: ${errorMsg}`);
+                console.log(`FAIL ${pageURL}: ${errorMsg}`);
             }
         }
 
         const duration = Date.now() - startTime;
-
-        // Save and print summary
         saveSummary();
         printSummary();
 
-        console.log(`\n📊 Crawl Results: ${passCount} passed, ${failCount} failed (${duration}ms)\n`);
+        console.log(`Crawl results: ${passCount} passed, ${failCount} failed (${duration}ms)`);
 
-        // Test should pass if majority of pages are ok
-        const passRate = passCount / (passCount + failCount);
-        expect(passRate).toBeGreaterThan(0.8); // 80% pass rate required
+        const total = passCount + failCount;
+        const passRate = total > 0 ? passCount / total : 0;
+        expect(passRate).toBeGreaterThan(0.8);
     });
-
 });
 
 test.describe('Crawler - Link Validation', () => {
-
     test('should check for broken links', async ({ page }) => {
-        const baseURL = process.env.LOT_BASE_URL || 'https://leagueoftraders.io';
+        const baseURL = getBaseURL();
+        const ignoredPatterns = getIgnoredBrokenLinkPatterns();
 
-        console.log(`\n🔗 Starting link validation...\n`);
+        console.log('Starting link validation');
 
-        // Discover pages
         const discoveredPages = await discoverPages(page, baseURL, {
             maxPages: 50,
             maxDepth: 2,
         });
 
-        // Validate links
         const linkResults = await validateLinks(page, discoveredPages);
 
-        const brokenLinks = linkResults.filter(r =>
-            (r.status === 404 || r.status === 0) &&
-            !r.url.includes('/terms') // Exclude known broken /terms page
-        );
+        const brokenLinks = linkResults.filter(result => {
+            const isBroken = result.status === 404 || result.status === 0;
+            const isIgnored = ignoredPatterns.some(pattern => result.url.includes(pattern));
+            return isBroken && !isIgnored;
+        });
 
         addBrokenLinks(brokenLinks.length);
 
         if (brokenLinks.length > 0) {
-            console.log('\n❌ Broken Links Found:');
-            brokenLinks.forEach(link => {
-                console.log(`  - ${link.url} (${link.status})`);
-            });
+            console.log('Broken links found:');
+            brokenLinks.forEach(link => console.log(`- ${link.url} (${link.status})`));
         }
 
-        // Fail if too many broken links
         expect(brokenLinks.length).toBeLessThan(5);
     });
-
 });

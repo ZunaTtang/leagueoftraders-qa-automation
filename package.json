@@ -1,7 +1,7 @@
 {
-  "name": "leagueoftraders-qa-automation",
+  "name": "web-qa-automation-tool",
   "version": "1.0.0",
-  "description": "Production-grade QA automation framework for League of Traders",
+  "description": "Reusable Playwright QA automation tool for web product health checks",
   "main": "index.js",
   "scripts": {
     "test": "playwright test",
@@ -27,9 +27,13 @@
     "qa",
     "automation",
     "playwright",
-    "testing"
+    "testing",
+    "web-qa",
+    "e2e",
+    "crawler",
+    "quality-gates"
   ],
-  "author": "",
+  "author": "Zuna",
   "license": "ISC",
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.89.0",

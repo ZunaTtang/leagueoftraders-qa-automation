@@ -1,7 +1,8 @@
 # 2-Stage Crawler Architecture
 
 ## Overview
-This document describes the 2-Stage Crawler Architecture implemented for the QA Automation framework. The goal is to separate **URL Discovery** from **Page Validation** to improve stability, scalability, and performance clarity.
+
+This document describes the crawler architecture used by the Web QA Automation Tool. The crawler separates **URL Discovery** from **Page Validation** so QA runs are easier to debug, scale, and reuse across different websites.
 
 ## Architecture Diagram
 
@@ -15,8 +16,8 @@ graph TD
         D --> E{Check Limits}
         E -->|Timeout/Max| F[Apply Fallback Policy]
         E -->|OK| G[Crawl Internal Links]
-        G --> H[Normalize & Deduplicate]
-        H --> I[Filter Excluded & Sample Dynamic Routes]
+        G --> H[Normalize and Deduplicate]
+        H --> I[Filter Excluded Routes and Sample Dynamic Routes]
         I --> J[Save crawl-urls.json]
     end
 
@@ -32,81 +33,86 @@ graph TD
     J --> K
 ```
 
-## Stage 1: URL Discovery (Fast)
+## Stage 1: URL Discovery
+
 **Module**: `utils/crawlerDiscovery.ts`  
 **Command**: `npm run crawl:discover`
 
 ### Features
-- **Sources**: Uses `sitemap.xml` (priority) and internal link crawling.
-- **Normalization**: Strips hash, trailing slashes, and tracking params.
-- **Exclusion**: Skips URLs matching patterns in `config/keyPages.ts`.
-- **Dynamic Sampling**: Limits repeated dynamic routes (e.g., `/items/:id`) to `sampleDynamicRoutes` (default: 5).
-- **Fallback Policy**:
-  - Target time: 60 seconds.
-  - If timeout occurs, reduces `maxPages` by 25% and `maxDepth` by 1 to ensure completion.
-- **Output**:
-  - `crawl-urls.json`: List of unique URLs with metadata.
-  - `crawl-discovery-summary.json`: Discovery metrics.
 
-## Stage 2: Page Validation (Heavy)
+- Uses `sitemap.xml` first, then falls back to internal link crawling
+- Normalizes URLs by removing hashes, trailing slashes, and tracking parameters
+- Excludes routes configured in `config/keyPages.ts`
+- Samples repeated dynamic routes such as `/items/:id`
+- Applies a timeout fallback policy to reduce crawl scope when needed
+- Saves URL and summary outputs for later validation
+
+### Outputs
+
+- `crawl-urls.json`
+- `crawl-discovery-summary.json`
+
+## Stage 2: Page Validation
+
 **Module**: `utils/crawlerValidation.ts`  
 **Command**: `npm run crawl:validate`
 
 ### Features
-- **Parallel Execution**: Validates pages concurrently (internal queue).
-- **Quality Gates**:
-  - **CRITICAL** (Fails Build):
-    - `5xx` Server Errors
-    - Page Crash / JS Execution Failure
-    - Blank Page (body < 50 chars)
-  - **WARNING** (Report Only):
-    - `404` Not Found (after filtering false positives)
-    - `timeout` (Page load exceeded limit)
-    - `console_error` (JS errors, excluding benign ones)
-    - `network_failure` (4xx internal API failures)
-- **Smart 404 Detection**:
-  - Detects "Soft 404" in SPAs (document 200 but content "Page Not Found").
-  - Identifies Auth Redirects (redirect to `/login`) as Warnings, not Failures.
-- **Output**:
-  - `crawl-results.json`: Detailed per-page results.
-  - `crawl-validation-summary.json`: Aggregated pass/fail metrics.
+
+- Validates pages concurrently with an internal worker queue
+- Classifies failures by severity
+- Detects server errors, blank pages, soft 404s, timeouts, console errors, and internal network failures
+- Separates critical failures from warnings so teams can decide what should block a release
+
+### Outputs
+
+- `crawl-results.json`
+- `crawl-validation-summary.json`
 
 ## Configuration
 
 | Environment Variable | Default | Description |
-|----------------------|---------|-------------|
-| `CRAWLER_WORKERS`    | 5       | Number of concurrent page validations |
-| `PAGE_TIMEOUT`       | 30000   | Timeout for specific page load (ms) |
-| `LOT_BASE_URL`       | ...     | Target website URL |
+|---|---:|---|
+| `QA_BASE_URL` | `http://localhost:3000` | Target website URL |
+| `QA_INTERNAL_DOMAINS` | Base URL hostname | Comma-separated domains that should pass network quality gates |
+| `QA_CRAWL_EXCLUSIONS` | - | Extra route patterns to exclude from crawling |
+| `QA_IGNORED_BROKEN_LINK_PATTERNS` | - | URL patterns to ignore during broken-link checks |
+| `CRAWLER_WORKERS` | `5` | Number of concurrent page validations |
+| `PAGE_TIMEOUT` | `30000` | Page load timeout in milliseconds |
+
+Legacy `LOT_BASE_URL` is still supported as a fallback for older setups.
 
 ## How to Run
 
-### Full Crawl (Discovery + Validation)
 ```bash
+# Discovery + validation
 npm run crawl:full
-```
 
-### Independent Stages
-```bash
-# Step 1: Discover
+# Discovery only
 npm run crawl:discover
 
-# Step 2: Validate (uses output from Step 1)
+# Validation only, using crawl-urls.json
 npm run crawl:validate
 ```
 
 ## Troubleshooting
 
-### "Discovery returned 0 pages"
-- Check `LOT_BASE_URL`.
-- Verify `sitemap.xml` exists.
-- Check if site requires authentication (currently discovery is unauthenticated by default, but can use setup state if configured).
+### Discovery returned 0 pages
 
-### "Validation Timeout"
-- Increase `PAGE_TIMEOUT`.
-- Reduce `CRAWLER_WORKERS` if CPU/Memory is bottlenecked.
+- Check `QA_BASE_URL`
+- Verify the site is reachable from the test environment
+- Check whether the site requires authentication
+- Review `QA_CRAWL_EXCLUSIONS` and `config/keyPages.ts`
 
-### "Too many 404s"
-- Check `crawl-results.json` for patterns.
-- If they are valid pages requiring login, exclude them in `config/keyPages.ts` or fix auth setup.
-- If they are false positives, check the "Smart 404" logic in `crawlerValidation.ts`.
+### Validation timeout
+
+- Increase `PAGE_TIMEOUT`
+- Reduce `CRAWLER_WORKERS`
+- Lower `maxPages` or `maxDepth` in the crawler test
+
+### Too many 404s
+
+- Check `crawl-results.json`
+- Add known acceptable routes to `QA_IGNORED_BROKEN_LINK_PATTERNS`
+- Exclude irrelevant routes in `config/keyPages.ts`
+- Confirm whether pages require login state before validation

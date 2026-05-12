@@ -1,71 +1,45 @@
 import { defineConfig, devices } from '@playwright/test';
 import dotenv from 'dotenv';
+import { getBaseURL, getBooleanEnv } from './utils/env';
 
 dotenv.config();
 
-/**
- * Production-Grade Playwright Configuration
- * Supports multiple test tiers: Smoke, Regression, Nightly
- */
+const videoMode = (process.env.VIDEO || 'on-first-retry') as 'off' | 'on' | 'retain-on-failure' | 'on-first-retry';
+
 export default defineConfig({
     testDir: './tests',
-
-    /* Global timeout for each test */
     timeout: 60 * 1000,
 
-    /* Expect timeout */
     expect: {
         timeout: 10000
     },
 
-    /* Run tests in files in parallel */
     fullyParallel: true,
-
-    /* Fail the build on CI if you accidentally left test.only in the source code */
-    forbidOnly: !!process.env.CI,
-
-    /* Retry on CI only - minimize flake, don't hide problems */
+    forbidOnly: Boolean(process.env.CI),
     retries: process.env.CI ? 1 : 0,
-
-    /* Opt out of parallel tests on CI */
     workers: process.env.CI ? 2 : undefined,
 
-    /* Reporter configuration */
     reporter: [
         ['html', { open: 'never' }],
         ['list'],
         ['json', { outputFile: 'test-results/results.json' }],
-        ['./utils/SmartReporter.ts'] // Add custom reporter
+        ['./utils/SmartReporter.ts']
     ],
 
-    /* Shared settings for all the projects below */
     use: {
-        /* Base URL from environment */
-        baseURL: process.env.LOT_BASE_URL || 'https://leagueoftraders.io',
-
-        /* Collect trace on first retry */
+        baseURL: getBaseURL(),
         trace: 'retain-on-failure',
-
-        /* Screenshot on failure */
         screenshot: 'only-on-failure',
-
-        /* Video for all tests */
-        video: 'on',
-
-        /* Headless mode */
-        headless: process.env.HEADLESS !== 'false',
-
-        /* Viewport */
+        video: videoMode,
+        headless: getBooleanEnv('HEADLESS', true),
         viewport: { width: 1920, height: 1080 },
     },
 
-    /* Configure projects for major browsers and test tiers */
     projects: [
         {
             name: 'setup',
             testMatch: /global\.setup\.ts/,
         },
-
         {
             name: 'smoke',
             testDir: './tests/smoke',
@@ -73,7 +47,6 @@ export default defineConfig({
             dependencies: ['setup'],
             timeout: 30 * 1000,
         },
-
         {
             name: 'regression',
             testDir: './tests/functional',
@@ -81,7 +54,6 @@ export default defineConfig({
             dependencies: ['setup'],
             timeout: 180 * 1000,
         },
-
         {
             name: 'crawler',
             testMatch: '**/crawler/full_scan.spec.ts',
@@ -90,26 +62,23 @@ export default defineConfig({
             timeout: 120 * 1000,
             retries: 0,
         },
-
         {
             name: 'crawler-discover',
             testMatch: '**/crawler/discover.spec.ts',
             use: { ...devices['Desktop Chrome'] },
             dependencies: ['setup'],
-            timeout: 90 * 1000, // 1.5 minutes (allow fallback)
+            timeout: 90 * 1000,
             retries: 0,
         },
-
         {
             name: 'crawler-validate',
             testMatch: '**/crawler/validate.spec.ts',
             use: { ...devices['Desktop Chrome'] },
             dependencies: ['setup'],
-            timeout: 600 * 1000, // 10 minutes
+            timeout: 600 * 1000,
             retries: 0,
-            workers: 1, // Parallelization controlled internally
+            workers: 1,
         },
-
         {
             name: 'nightly',
             testDir: './tests/nightly',
@@ -117,14 +86,13 @@ export default defineConfig({
             dependencies: ['setup'],
             timeout: 90 * 1000,
         },
-
         {
             name: 'integration',
             testDir: './tests/integration',
             use: { ...devices['Desktop Chrome'] },
             dependencies: ['setup'],
-            timeout: 300 * 1000, // 5 minutes for comprehensive tests
-            retries: 0, // Don't retry integration tests
+            timeout: 300 * 1000,
+            retries: 0,
         },
     ],
 });
